@@ -1,0 +1,1 @@
+"""Utilitários auxiliares do sistema."""
