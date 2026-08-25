@@ -36,6 +36,13 @@ from app.schemas.cakto import (
     CaktoProduct,
     CaktoOffer,
     CaktoPix,
+    CaktoCard,
+    CaktoBoleto,
+    CaktoPicPay,
+    CaktoCommission,
+    CaktoSubscription,
+    CaktoAddress,
+    CaktoShipping,
     CaktoWebhookResponse,
 )
 
@@ -80,5 +87,12 @@ __all__ = [
     "CaktoProduct",
     "CaktoOffer",
     "CaktoPix",
+    "CaktoCard",
+    "CaktoBoleto",
+    "CaktoPicPay",
+    "CaktoCommission",
+    "CaktoSubscription",
+    "CaktoAddress",
+    "CaktoShipping",
     "CaktoWebhookResponse",
 ]
