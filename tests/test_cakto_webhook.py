@@ -1,11 +1,13 @@
 import pytest
 import httpx
+from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.buyer import Buyer
 from app.models.order import Order, OrderStatus
 from app.models.book import Book
 from app.core.config import settings
+from app.schemas.cakto import CaktoWebhookPayload
 
 # Payload oficial baseado na documentação da Cakto com o ID de produto oficial
 CAKTO_PURCHASE_APPROVED_PAYLOAD = {
@@ -67,6 +69,128 @@ CAKTO_PURCHASE_APPROVED_PAYLOAD = {
     },
 }
 
+# Payload real completo do usuário com fees numérico, subscription, commissions, datas ISO 8601 e campos nulos
+USER_REAL_CAKTO_PAYLOAD = {
+    "data": {
+        "id": "71d7f232-f068-4482-aff9-ea918cc88f58",
+        "fbc": None,
+        "fbp": None,
+        "pix": {
+            "qrCode": "pixqrcode",
+            "expirationDate": "2026-08-25T19:36:39.227511+00:00",
+        },
+        "sck": None,
+        "card": {
+            "brand": "visa",
+            "holderName": "Card Example",
+            "lastDigits": "4323",
+        },
+        "fees": 0,
+        "offer": {
+            "id": "B8BcHrY",
+            "name": "Special Offer",
+            "image": None,
+            "price": 10,
+        },
+        "refId": "8PU41U3",
+        "amount": 90,
+        "boleto": {
+            "barcode": "03399853012970000154708032001011596630000000500",
+            "boletoUrl": "https://urlDePagamento.example.com",
+            "expirationDate": "2026-08-28",
+        },
+        "paidAt": "2026-08-25T19:06:39.227511+00:00",
+        "picpay": {
+            "qrCode": "picpaycode",
+            "paymentURL": "https://urlDePagamento.example.com",
+            "expirationDate": "2026-08-25T19:36:39.227511+00:00",
+        },
+        "reason": "Motivo de recusa do cartão",
+        "status": "paid",
+        "address": None,
+        "product": {
+            "id": "d4c39c54-735b-416f-bbdf-47752679b492",
+            "name": "Deus Conhece o Seu Nome",
+            "type": "unique",
+            "short_id": "AckhQ75",
+            "supportEmail": "teste@teste.com",
+            "invoiceDescription": "",
+        },
+        "checkout": 123,
+        "customer": {
+            "name": "John Doe",
+            "email": "john.doe@example.com",
+            "phone": "34999999999",
+            "docType": "cpf",
+            "birthDate": None,
+            "docNumber": "12345678909",
+        },
+        "discount": 10,
+        "due_date": "2026-08-25T19:07:39.227511+00:00",
+        "shipping": None,
+        "utm_term": "example",
+        "affiliate": "affiliate@example.com",
+        "createdAt": "2026-08-25T19:06:39.227511+00:00",
+        "baseAmount": 100,
+        "canceledAt": None,
+        "couponCode": None,
+        "offer_type": "main",
+        "refundedAt": None,
+        "utm_medium": "webhook",
+        "utm_source": "test",
+        "checkoutUrl": "https://pay.cakto.com.br/EXAMPLE?utm_source=test&utm_medium=webhook&utm_campaign=test_20260825&utm_term=example&utm_content=example",
+        "commissions": [
+            {
+                "type": "producer",
+                "user": "teste@teste.com",
+                "percentage": 80,
+                "totalAmount": 1.89,
+            }
+        ],
+        "utm_content": "example",
+        "installments": 1,
+        "parent_order": "95M26wi",
+        "subscription": {
+            "id": "ff79c9ea-a0ba-46c2-9588-0e5c13610d19",
+            "offer": "B8BcHrY",
+            "amount": "90.00",
+            "orders": ["71d7f232-f068-4482-aff9-ea918cc88f58"],
+            "status": "active",
+            "product": "d4c39c54-735b-416f-bbdf-47752679b492",
+            "customer": {
+                "name": "John Doe",
+                "email": "john.doe@example.com",
+                "phone": "34999999999",
+                "docType": "cpf",
+                "birthDate": None,
+                "docNumber": "12345678909",
+            },
+            "createdAt": "2026-08-25T19:06:39.227511+00:00",
+            "retention": "00:01:00",
+            "updatedAt": "2026-08-25T19:06:39.227511+00:00",
+            "canceledAt": None,
+            "trial_days": 1,
+            "max_retries": 3,
+            "parent_order": "71d7f232-f068-4482-aff9-ea918cc88f58",
+            "paymentMethod": "credit_card",
+            "current_period": 1,
+            "retry_interval": 1,
+            "next_payment_date": "2026-09-24T19:06:39.227511+00:00",
+            "recurrence_period": 30,
+            "quantity_recurrences": 0,
+            "paid_payments_quantity": 1,
+        },
+        "utm_campaign": "test_20260825",
+        "chargedbackAt": None,
+        "paymentMethod": "credit_card",
+        "refund_reason": "Motivo de reembolso",
+        "paymentMethodName": "Cartão de Crédito",
+        "subscription_period": 1,
+    },
+    "event": "purchase_approved",
+    "secret": settings.CAKTO_WEBHOOK_SECRET,
+}
+
 
 @pytest.mark.asyncio
 async def test_cakto_webhook_purchase_approved_flow(client: httpx.AsyncClient, db_session: AsyncSession):
@@ -99,6 +223,80 @@ async def test_cakto_webhook_purchase_approved_flow(client: httpx.AsyncClient, d
     book = (await db_session.execute(stmt_book)).scalar_one_or_none()
     assert book is not None
     assert book.child_name == "Mariana"
+
+
+@pytest.mark.asyncio
+async def test_cakto_webhook_user_real_payload_with_fees_zero(
+    client: httpx.AsyncClient, db_session: AsyncSession
+):
+    """
+    Testa o payload real enviado pelo usuário:
+    - fees = 0 (Decimal/numérico)
+    - subscription e commissions completas
+    - campos opcionais nulos (fbc, fbp, sck, address, shipping, couponCode, birthDate, canceledAt, refundedAt, chargedbackAt)
+    - card, boleto, picpay presentes
+    - datas ISO 8601
+    """
+    response = await client.post("/api/v1/webhooks/cakto", json=USER_REAL_CAKTO_PAYLOAD)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["received"] is True
+    assert data["status"] == "accepted"
+    assert data["event_id"] == "71d7f232-f068-4482-aff9-ea918cc88f58"
+
+    # Verifica comprador criado com email normalizado
+    stmt_buyer = select(Buyer).where(Buyer.email_normalized == "john.doe@example.com")
+    buyer = (await db_session.execute(stmt_buyer)).scalar_one_or_none()
+    assert buyer is not None
+    assert buyer.name == "John Doe"
+    assert buyer.phone == "5534999999999"
+    assert buyer.generation_credits == 1
+
+    # Verifica pedido
+    stmt_order = select(Order).where(Order.external_order_id == "71d7f232-f068-4482-aff9-ea918cc88f58")
+    order = (await db_session.execute(stmt_order)).scalar_one_or_none()
+    assert order is not None
+    assert order.status == OrderStatus.PAID
+    assert float(order.amount) == 90.0
+
+    # Verifica integridade dos metadados gravados
+    meta_data = order.metadata_info["data"]
+    assert meta_data["fees"] == 0 or Decimal(str(meta_data["fees"])) == Decimal("0")
+    assert meta_data["subscription"]["id"] == "ff79c9ea-a0ba-46c2-9588-0e5c13610d19"
+    assert len(meta_data["commissions"]) == 1
+    assert meta_data["commissions"][0]["type"] == "producer"
+    assert meta_data["card"]["brand"] == "visa"
+    assert meta_data["boleto"]["barcode"].startswith("0339985301")
+    assert meta_data["picpay"]["qrCode"] == "picpaycode"
+
+
+def test_cakto_schema_direct_validation():
+    """Validação direta de tipos e estruturas no CaktoWebhookPayload."""
+    parsed = CaktoWebhookPayload.model_validate(USER_REAL_CAKTO_PAYLOAD)
+    assert parsed.event == "purchase_approved"
+    assert parsed.data.fees == Decimal("0")
+    assert parsed.data.amount == Decimal("90")
+    assert parsed.data.baseAmount == Decimal("100")
+    assert parsed.data.discount == Decimal("10")
+    assert parsed.data.customer.name == "John Doe"
+    assert parsed.data.customer.docType == "cpf"
+    assert parsed.data.customer.birthDate is None
+    assert parsed.data.address is None
+    assert parsed.data.shipping is None
+    assert parsed.data.card is not None
+    assert parsed.data.card.brand == "visa"
+    assert parsed.data.boleto is not None
+    assert parsed.data.picpay is not None
+    assert parsed.data.subscription is not None
+    assert parsed.data.subscription.status == "active"
+    assert parsed.data.subscription.trial_days == 1
+    assert len(parsed.data.commissions) == 1
+    assert parsed.data.commissions[0].percentage == Decimal("80")
+    assert parsed.data.commissions[0].totalAmount == Decimal("1.89")
+    assert parsed.data.paidAt is not None
+
+    # Verifica que repr do payload não expõe o secret
+    assert settings.CAKTO_WEBHOOK_SECRET not in repr(parsed)
 
 
 @pytest.mark.asyncio
@@ -256,6 +454,7 @@ async def test_cakto_credits_grant_consumption_and_repurchase_flow(
 
     # 3. Geração do livro
     from app.services.book_service import BookService
+
     stmt_book = select(Book).where(Book.buyer_id == buyer.id)
     book = (await db_session.execute(stmt_book)).scalar_one()
     await BookService.generate_book(db_session, book.id)
@@ -296,4 +495,3 @@ async def test_cakto_credits_grant_consumption_and_repurchase_flow(
     assert data_avail3["available"] is True
     assert data_avail3["credits"] == 1
     assert data_avail3["can_generate"] is True
-
