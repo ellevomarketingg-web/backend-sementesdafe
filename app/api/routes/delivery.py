@@ -1,4 +1,5 @@
 import os
+import asyncio
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -238,12 +239,13 @@ async def send_book_whatsapp(
     phone = payload.telefone.strip()
     child_name = book.child_name or "sua criança"
 
-    # 1. Mensagem receptiva
+    # 1. Mensagem receptiva antes de enviar o PDF
     receptive_msg = (
-        f"Olá! ❤️ Aqui está o livro personalizado de *{child_name}* — Deus Conhece o Seu Nome! ✨\n\n"
-        f"Esperamos que esta história fortaleça os laços de fé e amor na sua casa! Que Deus abençoe sua família! 🙏📖"
+        f"Olá, tudo bem? ❤️ Passando para deixar o livro personalizado de *{child_name}* — Deus Conhece o Seu Nome! ✨\n\n"
+        f"Esperamos que esta história fortaleça os laços de fé e amor na sua casa! Que Deus abençoe sua linda família! 🙏📖"
     )
     await evolution_service.send_text(phone=phone, message=receptive_msg)
+    await asyncio.sleep(1.0)
 
     # 2. Envio do PDF oficial gerado
     filename = f"Deus_Conhece_o_Seu_Nome_{child_name}.pdf".replace(" ", "_")
@@ -366,12 +368,13 @@ async def send_order_bump_whatsapp(
         # Garante ou localiza o arquivo do calendário
         file_path = OrderBumpService.get_or_create_asset_file(settings.CAKTO_ORDER_BUMP_CALENDAR_ID)
         
-        # 1. Mensagem receptiva
+        # 1. Mensagem receptiva antes do PDF do calendário
         receptive_msg = (
-            "Olá! ❤️ Aqui está o seu *Calendário Cristão Infantil — Datas Especiais com Deus*! 🎄✨\n\n"
-            "Que cada mês traga momentos preciosos de conexão e fé para sua família! 🙏"
+            "Olá, tudo bem? ❤️ Passando para deixar o seu *Calendário Cristão Infantil — Datas Especiais com Deus*! 🎄✨\n\n"
+            "Que cada mês traga momentos preciosos de conexão, oração e fé para sua família! 🙏"
         )
         await evolution_service.send_text(phone=phone, message=receptive_msg)
+        await asyncio.sleep(1.0)
 
         # 2. Envio do PDF do Calendário
         doc_res = await evolution_service.send_document(
