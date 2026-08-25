@@ -112,16 +112,21 @@ class EvolutionService:
         norm_phone = self.normalize_phone(phone)
         media_content = document_url_or_base64
 
-        # Se for um arquivo existente no disco, lê e converte para base64
-        if os.path.exists(document_url_or_base64) and os.path.isfile(document_url_or_base64):
+        # Se for um arquivo existente no disco, lê e converte para base64 puro
+        resolved_path = document_url_or_base64
+        if not os.path.exists(resolved_path) and not resolved_path.startswith(("http://", "https://")):
+            # Tenta resolver relativo a partir da raiz do app
+            potential = os.path.abspath(resolved_path)
+            if os.path.exists(potential):
+                resolved_path = potential
+
+        if os.path.exists(resolved_path) and os.path.isfile(resolved_path):
             try:
-                mime_type, _ = mimetypes.guess_type(document_url_or_base64)
-                if not mime_type:
-                    mime_type = "application/pdf" if filename.endswith(".pdf") else "application/octet-stream"
-                with open(document_url_or_base64, "rb") as f:
+                with open(resolved_path, "rb") as f:
                     encoded_b64 = base64.b64encode(f.read()).decode("utf-8")
-                media_content = f"data:{mime_type};base64,{encoded_b64}"
-                logger.info(f"Arquivo local '{document_url_or_base64}' codificado em base64 ({len(encoded_b64)} chars)")
+                # Evolution API aceita base64 puro ou URL HTTP(s)
+                media_content = encoded_b64
+                logger.info(f"Arquivo local '{resolved_path}' codificado em base64 puro ({len(encoded_b64)} chars)")
             except Exception as e:
                 logger.error(f"Erro ao converter arquivo local para base64: {e}")
 
@@ -174,4 +179,3 @@ class EvolutionService:
 
 
 evolution_service = EvolutionService()
-
