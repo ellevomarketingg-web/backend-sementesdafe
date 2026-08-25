@@ -390,19 +390,17 @@ async def send_order_bump_whatsapp(
         }
 
     elif product_type == "figurinhas":
-        # 1. Mensagem receptiva
-        receptive_msg = (
-            "Olá! ❤️ Que bom ter você aqui! Vamos te enviar o seu exclusivo *Pack de Figurinhas Cristãs para WhatsApp*! ✨"
+        # Mensagem única de gatilho para o pack de figurinhas
+        trigger_msg = (
+            "Olá, tudo bem? ❤️ Passando para entregar o seu exclusivo *Pack de Figurinhas Cristãs para WhatsApp*! ✨🙏\n\n"
+            'Responda com "OK" para eu te enviar o pack de figurinhas.'
         )
-        await evolution_service.send_text(phone=phone, message=receptive_msg)
-
-        # 2. Mensagem exata de instrução
-        trigger_msg = 'Responda com "OK" para eu te enviar o pack de figurinhas.'
-        await evolution_service.send_text(phone=phone, message=trigger_msg)
+        res = await evolution_service.send_text(phone=phone, message=trigger_msg)
 
         return {
             "status": "ok",
             "message": "Instruções enviadas com sucesso por WhatsApp!",
+            "details": res,
         }
 
     raise HTTPException(
