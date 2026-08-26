@@ -55,7 +55,9 @@ class EvolutionService:
                 "presence": "composing",
                 "linkPreview": True,
             },
-            "text": message,
+            "textMessage": {
+                "text": message,
+            },
         }
 
         try:
